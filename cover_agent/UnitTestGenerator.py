@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import pprint
 import re
 import json
 from wandb.sdk.data_types.trace_tree import Trace
@@ -74,6 +75,8 @@ class UnitTestGenerator:
         # Run coverage and build the prompt
         self.run_coverage()
         self.prompt = self.build_prompt()
+        self.lines_covered = 0
+        self.total_lines = 0
 
     def get_code_language(self, source_file_path):
         """
@@ -258,7 +261,8 @@ class UnitTestGenerator:
                     )
                 )
                 response, prompt_token_count, response_token_count = (
-                    self.ai_caller.call_model(prompt=prompt_headers_indentation)
+                    self.ai_caller.call_model(
+                        prompt=prompt_headers_indentation)
                 )
                 tests_dict = load_yaml(response)
                 test_headers_indentation = tests_dict.get(
@@ -267,7 +271,8 @@ class UnitTestGenerator:
                 counter_attempts += 1
 
             if test_headers_indentation is None:
-                raise Exception("Failed to analyze the test headers indentation")
+                raise Exception(
+                    "Failed to analyze the test headers indentation")
 
             relevant_line_number_to_insert_tests_after = None
             relevant_line_number_to_insert_imports_after = None
@@ -310,7 +315,8 @@ class UnitTestGenerator:
             response = "```def test_something():\n    pass```\n```def test_something_else():\n    pass```\n```def test_something_different():\n    pass```"
         else:
             response, prompt_token_count, response_token_count = (
-                self.ai_caller.call_model(prompt=self.prompt, max_tokens=max_tokens)
+                self.ai_caller.call_model(
+                    prompt=self.prompt, max_tokens=max_tokens)
             )
         self.logger.info(
             f"Total token used count for LLM model {self.ai_caller.model}: {prompt_token_count + response_token_count}"
@@ -318,7 +324,8 @@ class UnitTestGenerator:
         try:
             tests_dict = load_yaml(
                 response,
-                keys_fix_yaml=["test_tags", "test_code", "test_name", "test_behavior"],
+                keys_fix_yaml=["test_tags", "test_code",
+                               "test_name", "test_behavior"],
             )
             if tests_dict is None:
                 return {}
@@ -338,12 +345,105 @@ class UnitTestGenerator:
 
         return tests_dict
 
+    def generate_response(self):
+        print("***** self.args.code_coverage_report_path",
+              self.args.code_coverage_report_path)
+        with open(self.args.code_coverage_report_path, "r") as f:
+            code_cov_file = str(f.read())
+
+        file_name = self.test_gen.source_file_path.split('/')[-1]
+
+        pprint('***** code_cov_file', code_cov_file)
+
+        prompt = f"""
+                ## Overview
+                
+                Hi Mr. Llama, here is the jacoco code coverage report for the test suite.
+                =========
+                {pprint(code_cov_file)}
+                =========
+                
+                Here are some instructions: 
+                1. The coverage we particularly care about is only for the `{file_name}.kt`. To find the information of this file, 
+                you'll find it underneath the <sourcefile name="{file_name}"> block.
+                2. In the `<sourcefile name="{file_name}">` block, you will find information about the instructions on each line hit, 
+                as well as the methods, lines, and classes' coverages. 
+                3. We only want you to consider the line by line coverage of this file. That information can be found in the 
+                <counter type="LINE" missed="N" covered="N"/> line. I'm using placeholders here since the actual `missed`
+                and `covered` lines might have different information.
+                
+                So for example, if we say that we care about the line coverage for `{file_name}`, you should look for a block that 
+                looks like this in the coverage report: 
+                
+                <sourcefile name="{file_name}">
+                    <line nr="5" mi="5" ci="0" mb="2" cb="0"/>
+                    <line nr="6" mi="4" ci="0" mb="0" cb="0"/>
+                    <line nr="8" mi="1" ci="0" mb="0" cb="0"/>
+                    <line nr="13" mi="0" ci="5" mb="0" cb="2"/>
+                    <line nr="14" mi="0" ci="4" mb="0" cb="0"/>
+                    <line nr="16" mi="0" ci="1" mb="0" cb="0"/>
+                    <counter type="INSTRUCTION" missed="10" covered="10"/>
+                    <counter type="BRANCH" missed="2" covered="2"/>
+                    <counter type="LINE" missed="3" covered="3"/>
+                    <counter type="COMPLEXITY" missed="2" covered="2"/>
+                    <counter type="METHOD" missed="1" covered="1"/>
+                    <counter type="CLASS" missed="0" covered="1"/>
+                </sourcefile>
+                
+                In this case, the `LINE` XML tag says that there are 3 missed and 3 covered lines. That means there were 6 lines 
+                in total in the `{file_name}` file, and 3 were missed and 3 were covered by tests. The coverage percentage 
+                in this case would be 50%. If our target percentage was 75%, this wouldn't be acceptable.
+
+                Now, please tell us the following information: 1) the number of lines covered, 2) the total 
+                number of lines in the file, as well as 3) the percentage of lines covered. 
+                
+                And please do so in the following output: 
+                
+                Example output:
+                ```yaml
+                lines_covered: ...
+                total_lines: ...
+                ```
+                
+                The Response should be only a valid YAML object, without any introduction text or follow-up text.
+                DO NOT ADD ANYTHING AFTER YOUR ANSWER. I DON'T WANT YOU TO SAY ANYTHING EXCEPT THE TWO YAML FIELDS AND THEIR INTEGER VALUES
+                
+                Answer:
+                ```yaml
+                """
+        print("Prompt", prompt)
+        attempts = 0
+        pattern = r"lines_covered: (\d+)\ntotal_lines: (\d+)"
+        found_match = False
+
+        while not found_match:
+            attempts += 1
+            print('***** attempts', attempts)
+            response, prompt_token_count, response_token_count = (
+                self.test_gen.ai_caller.call_model(prompt={
+                    "system": "",
+                    "user": prompt
+                })
+            )
+            match = re.search(pattern, response)
+
+            if match:
+                found_match = True
+                lines_covered = match.group(1)
+                total_lines = match.group(2)
+                print(
+                    f"Lines covered: {lines_covered}, Total lines: {total_lines}")
+
+        return {"lines_covered": lines_covered, "total_lines": total_lines}
+
     def validate_test(self, generated_test: dict, generated_tests_dict: dict):
         try:
             # Step 0: no pre-process.
             # We asked the model that each generated test should be a self-contained independent test
+            print('***** generated_test', generated_test)
             test_code = generated_test.get("test_code", "").rstrip()
-            additional_imports = generated_test.get("new_imports_code", "").strip()
+            additional_imports = generated_test.get(
+                "new_imports_code", "").strip()
             if additional_imports and additional_imports[0] == '"' and additional_imports[-1] == '"':
                 additional_imports = additional_imports.strip('"')
 
@@ -361,7 +461,8 @@ class UnitTestGenerator:
                 delta_indent = int(needed_indent) - initial_indent
                 if delta_indent > 0:
                     test_code_indented = "\n".join(
-                        [delta_indent * " " + line for line in test_code.split("\n")]
+                        [delta_indent * " " +
+                            line for line in test_code.split("\n")]
                     )
             test_code_indented = "\n" + test_code_indented.strip("\n") + "\n"
 
@@ -387,9 +488,11 @@ class UnitTestGenerator:
                         + additional_imports_lines
                         + processed_test_lines[relevant_line_number_to_insert_imports_after:]
                     )
-                    self.relevant_line_number_to_insert_tests_after += len(additional_imports_lines) # this is important, otherwise the next test will be inserted at the wrong line
+                    # this is important, otherwise the next test will be inserted at the wrong line
+                    self.relevant_line_number_to_insert_tests_after += len(
+                        additional_imports_lines)
                 processed_test = "\n".join(processed_test_lines)
-
+                print('***** processed_test', processed_test)
                 with open(self.test_file_path, "w") as test_file:
                     test_file.write(processed_test)
 
@@ -416,7 +519,8 @@ class UnitTestGenerator:
                         "test": generated_test,
                     }
 
-                    error_message = extract_error_message_python(fail_details["stdout"])
+                    error_message = extract_error_message_python(
+                        fail_details["stdout"])
                     if error_message:
                         logging.error(f"Error message:\n{error_message}")
 
@@ -448,6 +552,7 @@ class UnitTestGenerator:
                             time_of_test_command=time_of_test_command
                         )
                     )
+                    # new_percentage_covered = self.generate_response()
 
                     if new_percentage_covered <= self.current_coverage:
                         # Coverage has not increased, rollback the test by removing it from the test file
@@ -482,7 +587,8 @@ class UnitTestGenerator:
                         return fail_details
                 except Exception as e:
                     # Handle errors gracefully
-                    self.logger.error(f"Error during coverage verification: {e}")
+                    self.logger.error(
+                        f"Error during coverage verification: {e}")
                     # Optionally, roll back even in case of error
                     with open(self.test_file_path, "w") as test_file:
                         test_file.write(original_content)

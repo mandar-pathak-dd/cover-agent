@@ -76,6 +76,9 @@ class NewTests(BaseModel):
     new_tests: List[SingleTest] = Field(min_items=1, max_items={{ max_tests }}, description="A list of new test functions to append to the existing test suite, aiming to increase the code coverage. Each test should run as-is, without requiring any additional inputs or setup code. Don't introduce new dependencies")
 =====
 
+DO NOT START WITH "Here is the response"
+If there are no existing_test_function_signatures DO NOT include the field in the response.
+
 Example output:
 ```yaml
 language: {{ language }}

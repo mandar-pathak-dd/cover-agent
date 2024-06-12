@@ -1,7 +1,10 @@
 import datetime
 import os
+import pprint
+import re
 import shutil
 import sys
+from time import sleep
 import wandb
 
 from cover_agent.CustomLogger import CustomLogger
@@ -31,6 +34,8 @@ class CoverAgent:
             llm_model=args.model,
             api_base=args.api_base,
         )
+        self.lines_covered = 0
+        self.total_lines = 1
 
     def _validate_paths(self):
         if not os.path.isfile(self.args.source_file_path):
@@ -49,32 +54,36 @@ class CoverAgent:
         else:
             self.args.test_file_output_path = self.args.test_file_path
 
-    def generate_response(self):
+    def generate_coverage(self):
+        print("*** self.args.code_coverage_report_path",
+              self.args.code_coverage_report_path)
         with open(self.args.code_coverage_report_path, "r") as f:
             code_cov_file = str(f.read())
+
+        pprint(code_cov_file)
 
         file_name = self.test_gen.source_file_path.split('/')[-1]
 
         prompt = f"""
                 ## Overview
-                
+
                 Hi Mr. Llama, here is the jacoco code coverage report for the test suite.
                 =========
-                {code_cov_file}
+                {pprint(code_cov_file)}
                 =========
-                
-                Here are some instructions: 
-                1. The coverage we particularly care about is only for the `{file_name}.kt`. To find the information of this file, 
+
+                Here are some instructions:
+                1. The coverage we particularly care about is only for the `{file_name}.kt`. To find the information of this file,
                 you'll find it underneath the <sourcefile name="{file_name}"> block.
-                2. In the `<sourcefile name="{file_name}">` block, you will find information about the instructions on each line hit, 
-                as well as the methods, lines, and classes' coverages. 
-                3. We only want you to consider the line by line coverage of this file. That information can be found in the 
+                2. In the `<sourcefile name="{file_name}">` block, you will find information about the instructions on each line hit,
+                as well as the methods, lines, and classes' coverages.
+                3. We only want you to consider the line by line coverage of this file. That information can be found in the
                 <counter type="LINE" missed="N" covered="N"/> line. I'm using placeholders here since the actual `missed`
                 and `covered` lines might have different information.
-                
-                So for example, if we say that we care about the line coverage for `{file_name}`, you should look for a block that 
-                looks like this in the coverage report: 
-                
+
+                So for example, if we say that we care about the line coverage for `{file_name}`, you should look for a block that
+                looks like this in the coverage report:
+
                 <sourcefile name="{file_name}">
                     <line nr="5" mi="5" ci="0" mb="2" cb="0"/>
                     <line nr="6" mi="4" ci="0" mb="0" cb="0"/>
@@ -89,42 +98,54 @@ class CoverAgent:
                     <counter type="METHOD" missed="1" covered="1"/>
                     <counter type="CLASS" missed="0" covered="1"/>
                 </sourcefile>
-                
-                In this case, the `LINE` XML tag says that there are 3 missed and 3 covered lines. That means there were 6 lines 
-                in total in the `{file_name}` file, and 3 were missed and 3 were covered by tests. The coverage percentage 
+
+                In this case, the `LINE` XML tag says that there are 3 missed and 3 covered lines. That means there were 6 lines
+                in total in the `{file_name}` file, and 3 were missed and 3 were covered by tests. The coverage percentage
                 in this case would be 50%. If our target percentage was 75%, this wouldn't be acceptable.
 
-                Now, please tell us the following information: 1) the number of lines covered, 2) the total 
-                number of lines in the file, as well as 3) the percentage of lines covered. 
-                
-                And please do so in the following output: 
-                
+                Now, please tell us the following information: 1) the number of lines covered, 2) the total
+                number of lines in the file, as well as 3) the percentage of lines covered.
+
+                And please do so in the following output:
+
                 Example output:
                 ```yaml
                 lines_covered: ...
                 total_lines: ...
                 ```
-                
+
                 The Response should be only a valid YAML object, without any introduction text or follow-up text.
                 DO NOT ADD ANYTHING AFTER YOUR ANSWER. I DON'T WANT YOU TO SAY ANYTHING EXCEPT THE TWO YAML FIELDS AND THEIR INTEGER VALUES
-                
+
                 Answer:
                 ```yaml
                 """
         print("Prompt", prompt)
-        response = ""
         attempts = 0
-        while "```yaml" not in response:
+        pattern = r"lines_covered: (\d+)\ntotal_lines: (\d+)"
+        found_match = False
+        print('**** self.test_gen.ai_caller', self.test_gen.ai_caller)
+
+        while not found_match:
             attempts += 1
-            print('attempts', attempts)
+            print('*** attempts', attempts)
             response, prompt_token_count, response_token_count = (
                 self.test_gen.ai_caller.call_model(prompt={
                     "system": "",
                     "user": prompt
                 })
             )
+            print('*** response', response)
+            match = re.search(pattern, response)
 
-        return response
+            if match:
+                found_match = True
+                lines_covered = match.group(1)
+                total_lines = match.group(2)
+                print(
+                    f"*** Lines covered: {lines_covered}, Total lines: {total_lines}")
+
+        return {"lines_covered": lines_covered, "total_lines": total_lines}
 
     def run(self):
         if 'WANDB_API_KEY' in os.environ:
@@ -156,6 +177,7 @@ class CoverAgent:
                 test_result = self.test_gen.validate_test(
                     generated_test, generated_tests_dict
                 )
+                print('**** test_result', test_result)
                 test_results_list.append(test_result)
 
             iteration_count += 1
@@ -167,27 +189,24 @@ class CoverAgent:
                     file="analyze_test_coverage"
                 )
 
-                response = self.generate_response()
+                try:
+                    # sleep(100)
+                    resp = self.generate_coverage()
+                    total_lines = resp["total_lines"]
+                    lines_covered = resp["lines_covered"]
+                    print("response yaml", resp)
+                    print("lines_covered", lines_covered)
+                    print("total_lines", total_lines)
+                    self.lines_covered = lines_covered
+                    self.total_lines = total_lines
 
-                #
-                # Example output:
-                # ```yaml
-                # lines_covered: ...
-                # total_lines: ...
-                # ```
+                except Exception as e:
+                    print('*** failed to generate code cov')
+                    print(e)
+                    pass
 
-                resp = load_yaml(response, keys_fix_yaml=[
-                                 "lines_covered", "total_lines"])
-                print("response yaml", resp)
-                total_lines = resp["total_lines"]
-                lines_covered = resp["lines_covered"]
-                print("lines_covered", lines_covered)
-                print("total_lines", total_lines)
                 self.test_gen.current_coverage = int(
-                    lines_covered) / int(total_lines)
-
-                print("prompt", prompt)
-                print("response", response)
+                    self.lines_covered) / int(self.total_lines)
 
                 # self.test_gen.run_coverage()
 
