@@ -617,6 +617,7 @@ def main():
             is_not_test_file = "test" not in os.path.splitext(file)[0]
 
             if is_python_file and is_not_ignored and is_not_test_file:
+                args.test_file_output_path = ''
                 args.source_file_path = file
                 args.test_file_path = "test_" + file
                 print(f"Attempting to generate unit tests for {args.source_file_path} in {args.test_file_path} ...")
@@ -626,6 +627,7 @@ def main():
                     with open(args.test_file_path, 'w') as target_file:
                         target_file.write("")
 
+                print(f"Running cover agent with: {args}")
                 agent = CoverAgent(args)
                 agent.run()
 

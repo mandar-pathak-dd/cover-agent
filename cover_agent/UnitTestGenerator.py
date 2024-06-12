@@ -49,6 +49,7 @@ class UnitTestGenerator:
         Returns:
             None
         """
+        print(f"Initialized UnitTestGenerator with: {source_file_path, test_file_path}")
         # Class variables
         self.source_file_path = source_file_path
         self.test_file_path = test_file_path
