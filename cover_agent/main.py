@@ -271,6 +271,12 @@ def main():
 
     # If we pass in a directory, use the agent on all the files in the directory.
     elif args.source_file_directory:
+        try:
+            os.chdir(args.source_file_directory)
+        except Exception as e:
+            print(f"Encountered an error: {e} - try looking through the logs.")
+            return
+
         ignored_files = ["__init__.py", "main.py"]
         print(f"Attempting to generate unit tests for all Python files in {args.source_file_directory} ...")
         source_files = os.listdir(args.source_file_directory)
@@ -283,13 +289,6 @@ def main():
                 args.source_file_path = file
                 args.test_file_path = "test_" + file
                 print(f"Attempting to generate unit tests for {args.source_file_path} in {args.test_file_path} ...")
-
-                test_directory = os.getcwd() + "/test/"
-                # # Create the test directory, and also add an __init__.py if they don't exist.
-                # Path(test_directory).mkdir(parents=True, exist_ok=True)
-                # if not (os.path.exists(test_directory + "__init__.py")):
-                #     with open(args.test_file_path, 'w') as target_file:
-                #         target_file.write("")
 
                 # Create the file so the agent can write tests to it.
                 if not os.path.exists(args.test_file_path):
