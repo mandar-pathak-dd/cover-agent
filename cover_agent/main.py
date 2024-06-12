@@ -2,6 +2,7 @@ import argparse
 import os
 from cover_agent.CoverAgent import CoverAgent
 from cover_agent.version import __version__
+import logging
 
 
 def parse_args():
@@ -10,10 +11,16 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description=f"Cover Agent v{__version__}")
     parser.add_argument(
-        "--source-file-path", required=True, help="Path to the source file."
+        "--source-file-path", required=False, help="Path to the source file."
     )
     parser.add_argument(
-        "--test-file-path", required=True, help="Path to the input test file."
+        "--test-file-path", required=False, help="Path to the input test file."
+    )
+    parser.add_argument(
+        "--source-file-directory", required=False, help="Path to the source directory"
+    )
+    parser.add_argument(
+        "--test-file-directory", required=False, help="Path to the input test directory"
     )
     parser.add_argument(
         "--test-file-output-path",
@@ -90,9 +97,52 @@ def parse_args():
 
 
 def main():
+    print("Welcome to TestPilot!\n")
+
+    print("""
+    PPPP   RRRR   EEEEE  SSSS  EEEEE N   N TTTTT EEEEE DDDD      BBBBB Y   Y    JJJ  III  M   M  M   M  Y   Y
+    P   P  R   R  E      S     E     NN  N   T   E     D   D     B   B  Y Y      J   I    MM MM  MM MM   Y Y
+    PPPP   RRRR   EEEE   SSSS  EEEE  N N N   T   EEEE  D   D     BBBBB   Y       J   I    M M M  M M M    Y
+    P      R R    E          S E     N  NN   T   E     D   D     B   B   Y       J   I    M   M  M   M    Y
+    P      R  RR  EEEEE  SSSS  EEEEE N   N   T   EEEEE DDDD      BBBBB   Y    JJJJ  III   M   M  M   M    Y
+    """)
+
     args = parse_args()
-    agent = CoverAgent(args)
-    agent.run()
+
+    # If we pass only one source file path, just run the agent on the file.
+    if args.source_file_path:
+        print(f"Attempting to generate unit tests for {args.source_file_path} in {args.test_file_path} ...")
+        agent = CoverAgent(args)
+        agent.run()
+
+    elif args.source_file_directory:
+        ignored_files = ["__init__.py", "main.py"]
+        print(f"Attempting to generate unit tests for all Python files in {args.source_file_directory} ...")
+        source_files = os.listdir(args.source_file_directory)
+        for file in source_files:
+            is_python_file = os.path.splitext(file)[1] == ".py"
+            is_not_ignored = file not in ignored_files
+            is_not_test_file = "test" not in os.path.splitext(file)[0]
+            if is_python_file and is_not_ignored and is_not_test_file:
+
+                args.source_file_path = file
+
+                test_directory = os.getcwd() + "/test/"
+                args.test_file_path = test_directory + "test_" + file
+                print(f"Attempting to generate unit tests for {args.source_file_path} in {args.test_file_path} ...")
+
+                from pathlib import Path
+                Path(test_directory).mkdir(parents=True, exist_ok=True)
+                if not os.path.exists(args.test_file_path):
+                    with open(args.test_file_path, 'w') as target_file:
+                        target_file.write("")
+
+                agent = CoverAgent(args)
+                agent.run()
+
+    else:
+        print("Please provide either a source file path or directory.")
+        return
 
 
 if __name__ == "__main__":
