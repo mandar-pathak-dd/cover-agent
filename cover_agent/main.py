@@ -2,7 +2,7 @@ import argparse
 import os
 from cover_agent.CoverAgent import CoverAgent
 from cover_agent.version import __version__
-import logging
+from pathlib import Path
 
 
 def parse_args():
@@ -269,6 +269,7 @@ def main():
         agent = CoverAgent(args)
         agent.run()
 
+    # If we pass in a directory, use the agent on all the files in the directory.
     elif args.source_file_directory:
         ignored_files = ["__init__.py", "main.py"]
         print(f"Attempting to generate unit tests for all Python files in {args.source_file_directory} ...")
@@ -277,16 +278,20 @@ def main():
             is_python_file = os.path.splitext(file)[1] == ".py"
             is_not_ignored = file not in ignored_files
             is_not_test_file = "test" not in os.path.splitext(file)[0]
+
             if is_python_file and is_not_ignored and is_not_test_file:
-
                 args.source_file_path = file
-
-                test_directory = os.getcwd() + "/test/"
-                args.test_file_path = test_directory + "test_" + file
+                args.test_file_path = "test_" + file
                 print(f"Attempting to generate unit tests for {args.source_file_path} in {args.test_file_path} ...")
 
-                from pathlib import Path
-                Path(test_directory).mkdir(parents=True, exist_ok=True)
+                test_directory = os.getcwd() + "/test/"
+                # # Create the test directory, and also add an __init__.py if they don't exist.
+                # Path(test_directory).mkdir(parents=True, exist_ok=True)
+                # if not (os.path.exists(test_directory + "__init__.py")):
+                #     with open(args.test_file_path, 'w') as target_file:
+                #         target_file.write("")
+
+                # Create the file so the agent can write tests to it.
                 if not os.path.exists(args.test_file_path):
                     with open(args.test_file_path, 'w') as target_file:
                         target_file.write("")
