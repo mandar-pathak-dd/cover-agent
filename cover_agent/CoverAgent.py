@@ -194,9 +194,9 @@ class CoverAgent:
                     resp = self.generate_coverage()
                     total_lines = resp["total_lines"]
                     lines_covered = resp["lines_covered"]
-                    print("response yaml", resp)
-                    print("lines_covered", lines_covered)
-                    print("total_lines", total_lines)
+                    # print("response yaml", resp)
+                    # print("lines_covered", lines_covered)
+                    # print("total_lines", total_lines)
                     self.lines_covered = lines_covered
                     self.total_lines = total_lines
 
