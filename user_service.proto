@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package user;
+
+import "google/protobuf/descriptor.proto";
+
+option java_package = "com.example.user";
+option java_outer_classname = "UserServiceProto";
+option java_multiple_files = true;
+
+service UserProfileService {
+    rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+    rpc FetchGreeting(FetchGreetingRequest) returns (FetchGreetingResponse) {}
+    rpc GetUserPreferences(GetUserPreferencesRequest) returns (GetUserPreferencesResponse) {}
+}
+
+// CreateUserRequest represents a request to create a new user.
+message CreateUserRequest {
+    // [REQUIRED] The name of the user.
+    string name = 1;
+
+    // [REQUIRED] The email address of the user.
+    string email = 2;
+}
+
+message CreateUserResponse {
+    string user_id = 1;
+}
+
+
+message FetchGreetingRequest {
+    // [REQUIRED] The ID of the user for whom the greeting is being fetched.
+    string user_id = 1;
+}
+
+message FetchGreetingResponse {
+    string greeting = 1;
+}
+
+message GetUserPreferencesRequest {
+    string user_id = 1;
+}
+
+message GetUserPreferencesResponse {
+    repeated string preferences = 1;
+}
+

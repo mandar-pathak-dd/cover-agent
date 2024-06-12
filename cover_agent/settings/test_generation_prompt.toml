@@ -3,109 +3,93 @@ system="""\
 """
 
 user="""\
-## Overview
-You are a code assistant that accepts a {{ language }} source file, and a {{ language }} test file.
-Your goal is to generate additional unit tests to complement the existing test suite, in order to increase the code coverage against the source file.
+# Overview
+- You are an expert software engineer tasked with writing some end-to-end tests.
+- You will be given a Protobuf file containing gRPC service definitions. Your task is to generate
+end-to-end tests in a custom format that utilizes an internal testing framework.
+- Each end-to-end test consists of calling a gRPC service and confirming that the request was successful.
 
 Additional guidelines:
-- Carefully analyze the provided code. Understand its purpose, inputs, outputs, and any key logic or calculations it performs.
-- Brainstorm a list of test cases you think will be necessary to fully validate the correctness of the code and achieve 100% code coverage.
-- After each individual test has been added, review all tests to ensure they cover the full range of scenarios, including how to handle exceptions or errors.
-- If the original test file contains a test suite, assume that each generated test will be a part of the same suite. Ensure that the new tests are consistent with the existing test suite in terms of style, naming conventions, and structure.
+- Carefully analyze the provided Protobuf file. Understand the various messages that are defined in the Protobuf and how they are used.
+- Fields that are required to be in the request message have docstrings that contain the phrase "[REQUIRED]".
+When writing the end-to-end test, be sure to include those fields.
+- Ensure that all new code added is valid Kotlin code, has no syntactic errors and can actually compile.
 
-## Source File
-Here is the source file that you will be writing tests against, called `{{ source_file_name }}`.
-Note that we have manually added line numbers for each line of code, to help you understand the code coverage report.
-Those numbers are not a part of the original code.
+## Examples
+The following section provides an example of the test suite you are expected to generate.
+
 =========
-{{ source_file_numbered|trim }}
+class GreetingServiceLoadgenModule : AbstractModule() {
+
+    // Max. QPS that the test can reach
+    private val maxQPS = 500
+
+    // This is the total no. of runs to execute
+    private val totalRuns = 500
+
+    // How frequently this test is run
+    private val jobFrequency = Duration.ofMinutes(15).toKotlinDuration()
+
+    // Allows us to run the job at the same cadence but not at exactly the same time
+    private val maxJitter = Duration.ofSeconds(60).toKotlinDuration()
+
+    @ProvidesIntoSet
+    @Inject
+    fun getGreetingLoadgenJob(client: GreetingServiceCoroutineStub): LoadgenJob {
+        return LoadgenJob.ofRecurring(
+            name = "get-greeting-test",
+            totalRuns = totalRuns,
+            qpsRateLimit = maxQPS,
+            frequency = jobFrequency,
+            maxJitter = maxJitter,
+        ) {
+            val name = "dev platypus"
+            val resp = client.getGreeting(
+                GetGreetingRequest.newBuilder().setUserName(name).build(),
+            )
+        }
+    }
+}
+=========
+
+Things to consider about this output:
+
+- The name of the class is derived from the name of the service defined in the Protobuf file. E.g. if the name
+of the service is `GreetingService` then the class would be called `GreetingServiceLoadgenModule`.
+- Each rpc method defined in the Protobuf file has a corresponding method in the Kotlin class.
+The name of the method is derived from the name of the rpc defined in the Protobuf file. E.g. an rpc method
+called `GetGreeting` will have a method called `getGreetingLoadgenJob`.
+- The test method takes in a `client` parameter. This is a Kotlin client stub that is generated from the Protobuf
+definition. Name of the client stub class is also dependent on the name of the gRPC service. E.g. if the service
+is called `GreetingService` in Protobuf, then the client's type will be `GreetingServiceCoroutineStub`.
+
+=========
+
+## Actual Data
+
+The following section provides the actual input that you will be working with. You need to process it
+based on the guidelines provided above.
+
+### Service definition in Protobuf
+Here is the actual Protobuf definition that you will be working with.
+
+=========
+{{ protobuf_definition|trim }}
 =========
 
 
-## Test File
-Here is the file that contains the existing tests, called `{{ test_file_name }}`.
-=========
-{{ test_file| trim }}
-=========
-
+## Additional Protobuf files
+It is possible that the request and response messages used to call the RPC methods are distributed across multiple
+files. In that case, the contents of those additional files are provided below. Use them to identify the
+nature and contents of the Protobuf messages.
 
 {%- if additional_includes_section|trim %}
-
+=========
 
 {{ additional_includes_section|trim }}
-{% endif %}
 
-
-{%- if failed_tests_section|trim  %}
-
-{{ failed_tests_section|trim }}
-
-{% endif %}
-
-{%- if additional_instructions_text|trim  %}
-
-{{ additional_instructions_text|trim }}
-{% endif %}
-
-
-## Code Coverage
-The following is the existing code coverage report. Use this to determine what tests to write, as you should only write tests that increase the overall coverage:
 =========
-{{ code_coverage_report|trim }}
-=========
-
-
-## Response
-The output must be a YAML object equivalent to type $NewTests, according to the following Pydantic definitions:
-=====
-class SingleTest(BaseModel):
-    test_behavior: str = Field(description="Short description of the behavior the test covers")
-{%- if language in ["python","java"] %}
-    lines_to_cover: str = Field(description="A list of line numbers, currently uncovered, that this specific new test aims to cover")
-    test_name: str = Field(description=" A short test name, in snake case, that reflects the behaviour to test")
-{%- else %}
-    test_name: str = Field(description=" A short unique test name, that should reflect the test objective")
-{%- endif %}
-    test_code: str = Field(description="A single test function, that tests the behavior described in 'test_behavior'. The test should be a written like its a part of the existing test suite, if there is one, and it can use existing helper functions, setup, or teardown code.")
-    new_imports_code: str = Field(description="New imports that are required to run the new test function, and are not already imported in the test file. Give an empty string if no new imports are required. If relevant, add new imports as  'import ...' lines.")
-    test_tags: str = Field(description="A single label that best describes the test, out of: ['happy path', 'edge case','other']")
-
-class NewTests(BaseModel):
-    language: str = Field(description="The programming language of the source code")
-    existing_test_function_signature: str = Field(description="A single line repeating a signature header of one of the existing test functions")
-    new_tests: List[SingleTest] = Field(min_items=1, max_items={{ max_tests }}, description="A list of new test functions to append to the existing test suite, aiming to increase the code coverage. Each test should run as-is, without requiring any additional inputs or setup code. Don't introduce new dependencies")
-=====
-
-Example output:
-```yaml
-language: {{ language }}
-existing_test_function_signature: |
-  ...
-new_tests:
-- test_behavior: |
-    Test that the function returns the correct output for a single element list
-{%- if language in ["python","java"] %}
-  lines_to_cover: |
-    [1,2,5, ...]
-  test_name: |
-    test_single_element_list
-{%- else %}
-  test_name: |
-    ...
-{%- endif %}
-  test_code: |
-{%- if language in ["python"] %}
-    def ...
-{%- else %}
-    ...
-{%- endif %}
-  new_imports_code: |
-    ""
-  test_tags: happy path
-    ...
-```
-
-Use block scalar('|') to format each YAML output.
+{% endif %}
 
 
 {%- if additional_instructions_text|trim  %}
@@ -113,7 +97,16 @@ Use block scalar('|') to format each YAML output.
 {{ additional_instructions_text|trim }}
 {% endif %}
 
+## Instructions:
+- If you received multiple Protobuf files, combine the contents of all the Protobuf files
+  into a single Protobuf file.
+- Identify the list of rpc methods defined in the combined Protobuf file.
+- Generate the test suite for the service defined in the Protobuf file as shown above.
+- For each rpc method defined in the Protobuf file, generate a test as shown above.
+- Add the appropriate package name and imports to the generated Kotlin class.
 
-Response (should be a valid YAML, and nothing else):
-```yaml
+## Expected Response
+
+Your response should **ONLY** contain the Kotlin class the represents the generated test suite.
+**DO NOT** include any formatting, additional context or explanation on how or why this test suite was generated.
 """

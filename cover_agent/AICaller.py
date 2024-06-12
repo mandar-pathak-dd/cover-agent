@@ -18,7 +18,7 @@ class AICaller:
         self.model = model
         self.api_base = api_base
 
-    def call_model(self, prompt: dict, max_tokens=4096):
+    def call_model(self, prompt: dict, max_tokens=8192):
         """
         Call the language model with the provided prompt and retrieve the response.
 
@@ -47,7 +47,7 @@ class AICaller:
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": True,
-            "temperature": 0.2,
+            "temperature": 0.1,
         }
 
         # API base exception for OpenAI Compatible, Ollama and Hugging Face models
@@ -75,13 +75,13 @@ class AICaller:
 
         model_response = litellm.stream_chunk_builder(chunks, messages=messages)
 
-        if 'WANDB_API_KEY' in os.environ:
-            root_span = Trace(
-                name="inference_"+datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-                kind="llm",  # kind can be "llm", "chain", "agent" or "tool
-                inputs={"user_prompt": prompt["user"], "system_prompt": prompt["system"]},
-                outputs={"model_response": model_response["choices"][0]["message"]["content"]})
-            root_span.log(name="inference")
+        # if 'WANDB_API_KEY' in os.environ:
+        #     root_span = Trace(
+        #         name="inference_"+datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+        #         kind="llm",  # kind can be "llm", "chain", "agent" or "tool
+        #         inputs={"user_prompt": prompt["user"], "system_prompt": prompt["system"]},
+        #         outputs={"model_response": model_response["choices"][0]["message"]["content"]})
+        #     root_span.log(name="inference")
 
         # Returns: Response, Prompt token count, and Response token count
         return (
