@@ -128,7 +128,7 @@ class UnitTestGenerator:
             command=self.test_command, cwd=self.test_command_dir
         )
         assert (
-            exit_code == 0
+            exit_code == 0 or exit_code == 5
         ), f'Fatal: Error running test command. Are you sure the command is correct? "{self.test_command}"\nExit code {exit_code}. \nStdout: \n{stdout} \nStderr: \n{stderr}'
 
         # Instantiate CoverageProcessor and process the coverage report
@@ -370,6 +370,9 @@ class UnitTestGenerator:
                 # Step 1: Append the generated test to the relevant line in the test file
                 with open(self.test_file_path, "r") as test_file:
                     original_content = test_file.read()  # Store original content
+                    print("READING FROM FILE: ", self.test_file_path)
+                    print("CONTENTS: ", original_content)
+
                 original_content_lines = original_content.split("\n")
                 test_code_lines = test_code_indented.split("\n")
                 # insert the test code at the relevant line
@@ -391,6 +394,8 @@ class UnitTestGenerator:
                 processed_test = "\n".join(processed_test_lines)
 
                 with open(self.test_file_path, "w") as test_file:
+                    print("WRITING TO FILE: ", self.test_file_path)
+                    print("CONTENTS: ", processed_test)
                     test_file.write(processed_test)
 
                 # Step 2: Run the test using the Runner class
