@@ -1,4 +1,5 @@
 from jinja2 import Template
+import json
 
 
 class ReportGenerator:
@@ -52,18 +53,18 @@ class ReportGenerator:
                 <th>Status</th>
                 <th>Reason</th>
                 <th>Exit Code</th>
-                <th>Stderr</th>
-                <th>Stdout</th>
                 <th>Test</th>
+                <th>StdOut</th>
+                <th>StdErr</th>
             </tr>
             {% for result in results %}
             <tr>
                 <td class="status-{{ result.status }}">{{ result.status }}</td>
                 <td>{{ result.reason }}</td>
                 <td>{{ result.exit_code }}</td>
-                <td>{% if result.stderr %}<pre><code class="language-shell">{{ result.stderr }}</code></pre>{% else %}&nbsp;{% endif %}</td>
-                <td>{% if result.stdout %}<pre><code class="language-shell">{{ result.stdout }}</code></pre>{% else %}&nbsp;{% endif %}</td>
                 <td>{% if result.test %}<pre><code class="language-python">{{ result.test }}</code></pre>{% else %}&nbsp;{% endif %}</td>
+                <td>{% if result.stdout %}<pre><code class="language-shell">{{ result.stdout }}</code></pre>{% else %}&nbsp;{% endif %}</td>
+                <td>{% if result.stderr %}<pre><code class="language-shell">{{ result.stderr }}</code></pre>{% else %}&nbsp;{% endif %}</td>
             </tr>
             {% endfor %}
         </table>
@@ -80,7 +81,16 @@ class ReportGenerator:
         :param results: List of dictionaries with test results.
         :param file_path: Path to the HTML file where the report will be written.
         """
+
         template = Template(cls.HTML_TEMPLATE)
+        for result in results:
+            #result['test'] = json.dumps(result['test'], indent=4)
+            result['test'] = f"""
+Test Behavior: {result['test']['test_behavior']}\n
+Lines to Cover: {result['test']['lines_to_cover']}\n
+Test Name: {result['test']['test_name']}\n
+Test Code:\n{result['test']['test_code']}\n
+            """.strip()
         html_content = template.render(results=results)
 
         with open(file_path, "w") as file:
