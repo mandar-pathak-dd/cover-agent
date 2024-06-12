@@ -91,7 +91,7 @@ class ReportGenerator:
         # Test Name: {result['test']['test_name']}\n
         # Test Code:\n{result['test']['test_code']}\n
         #             """.strip()
-        html_content = template.render(results=results)
+            html_content = template.render(results=results)
 
         with open(file_path, "w") as file:
             file.write(html_content)
