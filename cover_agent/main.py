@@ -106,24 +106,29 @@ def main():
         agent.run()
 
     elif args.source_file_directory:
+        ignored_files = ["__init__.py", "main.py"]
         print(f"Attempting to generate unit tests for all Python files in {args.source_file_directory} ...")
         source_files = os.listdir(args.source_file_directory)
         for file in source_files:
-            if os.path.splitext(file)[1] == ".py":
+            is_python_file = os.path.splitext(file)[1] == ".py"
+            is_not_ignored = file not in ignored_files
+            is_not_test_file = "test" not in os.path.splitext(file)[0]
+            if is_python_file and is_not_ignored and is_not_test_file:
+
                 args.source_file_path = file
 
-                test_file_directory = os.getcwd() + "/test"
-                args.test_file_path = os.path.splitext(file)[0] + "_test.py"
+                test_directory = os.getcwd() + "/test/"
+                args.test_file_path = test_directory + "test_" + file
                 print(f"Attempting to generate unit tests for {args.source_file_path} in {args.test_file_path} ...")
 
                 from pathlib import Path
-                Path(test_file_directory).mkdir(parents=True, exist_ok=True)
+                Path(test_directory).mkdir(parents=True, exist_ok=True)
                 if not os.path.exists(args.test_file_path):
                     with open(args.test_file_path, 'w') as target_file:
                         target_file.write("")
 
-                agent = CoverAgent(args)
-                agent.run()
+                # agent = CoverAgent(args)
+                # agent.run()
 
     else:
         print("Please provide either a source file path or directory.")
