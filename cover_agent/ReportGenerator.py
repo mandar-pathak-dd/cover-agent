@@ -85,12 +85,12 @@ class ReportGenerator:
         template = Template(cls.HTML_TEMPLATE)
         for result in results:
             #result['test'] = json.dumps(result['test'], indent=4)
-            result['test'] = f"""
-Test Behavior: {result['test']['test_behavior']}\n
-Lines to Cover: {result['test']['lines_to_cover']}\n
-Test Name: {result['test']['test_name']}\n
-Test Code:\n{result['test']['test_code']}\n
-            """.strip()
+#             result['test'] = f"""
+# Test Behavior: {result['test']['test_behavior']}\n
+# Lines to Cover: {result['test']['lines_to_cover']}\n
+# Test Name: {result['test']['test_name']}\n
+# Test Code:\n{result['test']['test_code']}\n
+#             """.strip()
         html_content = template.render(results=results)
 
         with open(file_path, "w") as file:
