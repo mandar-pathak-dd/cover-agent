@@ -127,8 +127,8 @@ def main():
                     with open(args.test_file_path, 'w') as target_file:
                         target_file.write("")
 
-                # agent = CoverAgent(args)
-                # agent.run()
+                agent = CoverAgent(args)
+                agent.run()
 
     else:
         print("Please provide either a source file path or directory.")
